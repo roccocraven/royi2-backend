@@ -1,0 +1,11 @@
+{
+  "name": "royi2-backend",
+  "version": "1.0.0",
+  "description": "Netlify function to submit blog posts to Royi2",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "@octokit/rest": "^20.0.0"
+  },
+  "license": "MIT"
+}
