@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {},
   "dependencies": {
-    "@octokit/rest": "^20.0.0"
+    "@octokit/rest": "^20.1.2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [],
+  "author": ""
 }
