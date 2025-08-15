@@ -1,68 +1,91 @@
-const { Octokit } = require("@octokit/rest");
+﻿const { Octokit } = require("@octokit/rest");
+
+const headers = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
 
 exports.handler = async function(event) {
+  // CORS preflight
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+  }
+
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, headers, body: JSON.stringify({ message: "Method Not Allowed" }) };
   }
 
-  const { title, body } = JSON.parse(event.body || "{}");
+  let payload = {};
+  try {
+    payload = JSON.parse(event.body || "{}");
+  } catch (e) {
+    return { statusCode: 400, headers, body: JSON.stringify({ message: "Invalid JSON", error: e.message }) };
+  }
+
+  const title = (payload.title || "").trim();
+  const body  = (payload.body  || "").trim();
+
   if (!title || !body) {
-    return { statusCode: 400, body: "Missing title or body" };
+    return { statusCode: 400, headers, body: JSON.stringify({ message: "Missing title or body" }) };
   }
 
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const date = new Date().toISOString().split("T")[0];
-  const filename = `${date}-${slug}.md`;
+  // Robust slug: keep a-z0-9, collapse spaces/punct to -, trim dashes
+  const slug = title.toLowerCase()
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  const dateISO = new Date().toISOString();
+  const dateDay = dateISO.split("T")[0];
+
+  const filename = `${dateDay}-${slug}.md`;
   const filepath = `_posts/${filename}`;
 
   const content = `---
 layout: post
-title: "${title}"
-date: ${new Date().toISOString()}
+title: "${title.replace(/"/g, '\\"')}"
+date: ${dateISO}
 categories: [guest]
 ---
-
 ${body}
 `;
 
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    return { statusCode: 500, headers, body: JSON.stringify({ message: "Missing GITHUB_TOKEN env var" }) };
+  }
+
+  const octokit = new Octokit({ auth: token });
 
   try {
-    const { data: repo } = await octokit.repos.get({
-      owner: "roccocraven",
-      repo: "royi2"
-    });
-
-    const { data: latestCommit } = await octokit.repos.getContent({
-      owner: "roccocraven",
-      repo: "royi2",
-      path: filepath
-    }).catch(() => ({ data: null }));
-
-    if (latestCommit) {
-      return {
-        statusCode: 409,
-        body: JSON.stringify({ message: "Post already exists" })
-      };
+    // Check for duplicate
+    try {
+      await octokit.repos.getContent({ owner: "' + $Owner + '", repo: "' + $SiteRepo + '", path: filepath });
+      return { statusCode: 409, headers, body: JSON.stringify({ message: "Post already exists", filepath }) };
+    } catch (e) {
+      // 404 means good to create
+      if (e.status && e.status !== 404) throw e;
     }
 
+    // Create file on main
     await octokit.repos.createOrUpdateFileContents({
-      owner: "roccocraven",
-      repo: "royi2",
+      owner: "' + $Owner + '",
+      repo: "' + $SiteRepo + '",
       path: filepath,
       message: `Add guest post: ${title}`,
       content: Buffer.from(content).toString("base64"),
-      branch: "main"
+      branch: "' + $Branch + '"
     });
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Post submitted successfully!" })
-    };
+    return { statusCode: 200, headers, body: JSON.stringify({ message: "Post submitted successfully!", filepath }) };
   } catch (error) {
+    // Return useful details for debugging
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: "Error submitting post", error: error.message })
+      headers,
+      body: JSON.stringify({ message: "Error submitting post", error: error.message || String(error) })
     };
   }
 };
