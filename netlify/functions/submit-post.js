@@ -62,7 +62,7 @@ ${body}
   try {
     // Check for duplicate
     try {
-      await octokit.repos.getContent({ owner: "' + $Owner + '", repo: "' + $SiteRepo + '", path: filepath });
+      await octokit.repos.getContent({ owner: "roccocraven", repo: "royi2", path: filepath });
       return { statusCode: 409, headers, body: JSON.stringify({ message: "Post already exists", filepath }) };
     } catch (e) {
       // 404 means good to create
@@ -71,12 +71,12 @@ ${body}
 
     // Create file on main
     await octokit.repos.createOrUpdateFileContents({
-      owner: "' + $Owner + '",
-      repo: "' + $SiteRepo + '",
+      owner: "roccocraven",
+      repo: "royi2",
       path: filepath,
       message: `Add guest post: ${title}`,
       content: Buffer.from(content).toString("base64"),
-      branch: "' + $Branch + '"
+      branch: "main"
     });
 
     return { statusCode: 200, headers, body: JSON.stringify({ message: "Post submitted successfully!", filepath }) };
